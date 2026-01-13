@@ -1,0 +1,10 @@
+{
+	"id": "ludos-obsidian-plugin",
+	"name": "Ludos",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Transform Obsidian into a Game Design environment.",
+	"author": "Jules",
+	"authorUrl": "https://github.com/obsidianmd",
+	"isDesktopOnly": false
+}
