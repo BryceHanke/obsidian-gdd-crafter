@@ -3,6 +3,8 @@ import process from "process";
 import esbuildSvelte from "esbuild-svelte";
 import sveltePreprocess from "svelte-preprocess";
 import { createRequire } from "module";
+import { readFile } from "fs/promises";
+import { compile, compileModule } from "svelte/compiler";
 
 const require = createRequire(import.meta.url);
 const pkg = require("./package.json");
@@ -56,9 +58,35 @@ const context = await esbuild.context({
 	treeShaking: true,
 	outfile: "main.js",
 	plugins: [
+		{
+			name: "svelte-module",
+			setup(build) {
+				build.onLoad({ filter: /\.svelte\.(ts|js)$/ }, async (args) => {
+					const source = await readFile(args.path, "utf8");
+					const filename = args.path;
+
+					// Strip types if TS
+					const { code } = await esbuild.transform(source, { loader: "ts" });
+
+					// Compile with Svelte
+					// Force filename to end in .svelte.js to ensure module mode
+					const virtualFilename = filename.replace(/\.svelte\.ts$/, ".svelte.js");
+
+					const compiled = compileModule(code, {
+						filename: virtualFilename,
+					});
+
+					return {
+						contents: compiled.js.code,
+						loader: "js",
+					};
+				});
+			},
+		},
 		esbuildSvelte({
 			compilerOptions: { css: "injected" },
 			preprocess: sveltePreprocess(),
+			include: /\.svelte$/,
 		}),
 	],
 });
