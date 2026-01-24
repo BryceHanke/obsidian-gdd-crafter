@@ -2,8 +2,17 @@ import { App, TFile } from 'obsidian';
 
 export class LudosStore {
 	app: App;
-	activeFile = $state<TFile | null>(null);
+	_activeFile = $state<TFile | null>(null);
 	activeFileType = $state<string | null>(null);
+
+	get activeFile() {
+		return this._activeFile;
+	}
+
+	set activeFile(file: TFile | null) {
+		this._activeFile = file;
+		this.updateActiveFileType();
+	}
 
 	constructor(app: App) {
 		this.app = app;
@@ -20,30 +29,24 @@ export class LudosStore {
 		// Initial check
 		this.activeFile = this.app.workspace.getActiveFile();
 
-		// Effect to derive active file type from frontmatter
-		$effect(() => {
-			if (this.activeFile) {
-				const cache = this.app.metadataCache.getFileCache(this.activeFile);
-				if (cache && cache.frontmatter) {
-					this.activeFileType = cache.frontmatter.type || null;
-				} else {
-					this.activeFileType = null;
-				}
-			} else {
-				this.activeFileType = null;
-			}
-		});
-
 		// Listen for metadata changes to update type if frontmatter changes
 		this.app.metadataCache.on('changed', (file) => {
 			if (this.activeFile && file.path === this.activeFile.path) {
-				const cache = this.app.metadataCache.getFileCache(file);
-				if (cache && cache.frontmatter) {
-					this.activeFileType = cache.frontmatter.type || null;
-				} else {
-					this.activeFileType = null;
-				}
+				this.updateActiveFileType();
 			}
 		});
+	}
+
+	updateActiveFileType() {
+		if (this.activeFile) {
+			const cache = this.app.metadataCache.getFileCache(this.activeFile);
+			if (cache && cache.frontmatter) {
+				this.activeFileType = cache.frontmatter.type || null;
+			} else {
+				this.activeFileType = null;
+			}
+		} else {
+			this.activeFileType = null;
+		}
 	}
 }
