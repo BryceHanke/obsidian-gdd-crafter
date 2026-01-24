@@ -3,6 +3,7 @@
 	import { LudosStore } from '../stores/store.svelte';
 	import Checklist from './components/Checklist.svelte';
 	import FormView from './components/FormView.svelte';
+	import Guide from './components/Guide.svelte';
 
 	interface Props {
 		ludosStore: LudosStore;
@@ -32,10 +33,13 @@
 			{/if}
 
 		{:else}
-			<p class="empty-state">No type defined in frontmatter.</p>
+			<div class="empty-state-container">
+				<p class="empty-state">No type defined in frontmatter.</p>
+				<Guide />
+			</div>
 		{/if}
 	{:else}
-		<p class="empty-state">No active markdown file.</p>
+		<Guide />
 	{/if}
 </div>
 
