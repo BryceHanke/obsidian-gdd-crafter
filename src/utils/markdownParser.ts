@@ -9,12 +9,31 @@ export const SECTION_HEADERS = {
     audioStyle: 'Audio Style'
 };
 
+const METADATA_REGEX = /^```json:ludos\n([\s\S]*?)\n```/m;
+
 export function parseGDD(content: string, frontmatter: any): GDDData {
+    // Attempt to parse from code block
+    let metadata: any = {};
+    const match = content.match(METADATA_REGEX);
+
+    if (match) {
+        try {
+            metadata = JSON.parse(match[1]);
+        } catch (e) {
+            console.error('Failed to parse GDD metadata', e);
+        }
+    } else {
+        // Fallback to frontmatter if available
+        if (frontmatter) {
+             metadata = frontmatter;
+        }
+    }
+
     return {
-        title: frontmatter.title || '',
-        genre: frontmatter.genre || '',
-        tagline: frontmatter.tagline || '',
-        targetAudience: frontmatter.targetAudience || '',
+        title: metadata.title || '',
+        genre: metadata.genre || '',
+        tagline: metadata.tagline || '',
+        targetAudience: metadata.targetAudience || '',
 
         coreLoop: extractSection(content, SECTION_HEADERS.coreLoop),
         mechanics: extractSection(content, SECTION_HEADERS.mechanics),
@@ -36,30 +55,56 @@ export function updateGDDSection(content: string, header: string, newContent: st
     const sectionContent = `${newContent.trim()}\n`;
 
     if (regex.test(content)) {
-        // $1 is prefix newline, $2 is header line, replace $3 (content)
-        // We need to be careful with capturing groups.
-        // Group 1: (^|\n)
-        // Group 2: (## Header \n)
-        // Group 3: (Content)
         return content.replace(regex, `$1$2${sectionContent}`);
     } else {
-        // Append if not found
-        // Ensure there's a newline before appending
         const prefix = content.endsWith('\n') ? '' : '\n';
-        // If content is completely empty, we might not need prefix, but normally content has at least frontmatter end.
         const headerPrefix = content.trim().length === 0 ? '' : '\n';
         return `${content}${prefix}${headerPrefix}## ${header}\n${sectionContent}`;
     }
 }
 
+export function updateGDDMetadata(content: string, key: string, value: any, existingData?: any): string {
+    const match = content.match(METADATA_REGEX);
+    let metadata: any = {};
+    let newBlock = '';
+
+    if (match) {
+        try {
+            metadata = JSON.parse(match[1]);
+        } catch (e) {
+            console.error('Failed to parse existing GDD metadata during update', e);
+        }
+        metadata[key] = value;
+        newBlock = `\`\`\`json:ludos\n${JSON.stringify(metadata, null, 2)}\n\`\`\``;
+        return content.replace(METADATA_REGEX, newBlock);
+    } else {
+        // If block doesn't exist, create it at the top
+        if (existingData) {
+            metadata = { ...existingData };
+        } else {
+            metadata = { type: 'gdd' };
+        }
+
+        if (!metadata.type) metadata.type = 'gdd';
+
+        metadata[key] = value;
+        newBlock = `\`\`\`json:ludos\n${JSON.stringify(metadata, null, 2)}\n\`\`\`\n`;
+        return newBlock + content;
+    }
+}
+
 export function generateGDDTemplate(): string {
-    return `---
-type: gdd
-title: New Game Project
-genre: Undefined
-tagline: A generic game description
-targetAudience: Everyone
----
+    const metadata = {
+        type: 'gdd',
+        title: 'New Game Project',
+        genre: 'Undefined',
+        tagline: 'A generic game description',
+        targetAudience: 'Everyone'
+    };
+
+    const jsonBlock = `\`\`\`json:ludos\n${JSON.stringify(metadata, null, 2)}\n\`\`\``;
+
+    return `${jsonBlock}
 
 # Game Design Document
 

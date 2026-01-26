@@ -1,6 +1,6 @@
 import { App, TFile } from 'obsidian';
 import type { GDDData } from '../types';
-import { parseGDD, updateGDDSection, SECTION_HEADERS, generateGDDTemplate } from '../utils/markdownParser';
+import { parseGDD, updateGDDSection, updateGDDMetadata, SECTION_HEADERS, generateGDDTemplate } from '../utils/markdownParser';
 
 export class LudosStore {
 	app: App;
@@ -34,12 +34,8 @@ export class LudosStore {
 		this.setActiveFile(this.app.workspace.getActiveFile());
 
 		// Listen for file changes (both content and metadata)
-		// This ensures that if the file is edited outside the plugin (e.g. in the editor), the plugin view updates.
 		this.app.vault.on('modify', (file) => {
 			 if (this._activeFile && file.path === this._activeFile.path) {
-				 // We re-load the GDD data.
-				 // Note: This might cause UI glitches if typing continuously and autosaving triggers this.
-				 // Ideal components will handle their own state and only commit on blur/debounce.
 				 this.loadGDD(this._activeFile);
 			 }
 		});
@@ -55,13 +51,16 @@ export class LudosStore {
 	}
 
 	async loadGDD(file: TFile) {
-		const cache = this.app.metadataCache.getFileCache(file);
+        // Read content to check for GDD marker
+        const content = await this.app.vault.read(file);
 
-		// We rely on 'type: gdd' in frontmatter to identify GDD files.
-		const frontmatter = cache?.frontmatter;
-		if (frontmatter?.type === 'gdd') {
-			const content = await this.app.vault.read(file);
-			this._gddData = parseGDD(content, frontmatter);
+        // Check for code block marker OR frontmatter (legacy)
+        const hasCodeBlock = content.includes('```json:ludos');
+        const cache = this.app.metadataCache.getFileCache(file);
+        const hasFrontmatter = cache?.frontmatter?.type === 'gdd';
+
+        if (hasCodeBlock || hasFrontmatter) {
+			this._gddData = parseGDD(content, cache?.frontmatter);
 		} else {
 			this._gddData = null;
 		}
@@ -74,15 +73,24 @@ export class LudosStore {
 		await this.app.vault.modify(this._activeFile, template);
 	}
 
-	async updateFrontmatterField(key: string, value: any) {
+	async updateMetadataField(key: string, value: any) {
 		if (!this._activeFile) return;
 
-		// update local state optimistically?
-		// Actually, processFrontMatter triggers a file modify, which triggers loadGDD.
-		// So we just need to ensure the write happens.
-		await this.app.fileManager.processFrontMatter(this._activeFile, (frontmatter) => {
-			frontmatter[key] = value;
-		});
+        const content = await this.app.vault.read(this._activeFile);
+
+        // Pass current gddData as baseline for migration
+        const currentData = this._gddData ? {
+            title: this._gddData.title,
+            genre: this._gddData.genre,
+            tagline: this._gddData.tagline,
+            targetAudience: this._gddData.targetAudience
+        } : undefined;
+
+        const newContent = updateGDDMetadata(content, key, value, currentData);
+
+        if (newContent !== content) {
+            await this.app.vault.modify(this._activeFile, newContent);
+        }
 	}
 
 	async updateBodySection(headerKey: keyof typeof SECTION_HEADERS, newContent: string) {
