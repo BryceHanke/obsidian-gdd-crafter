@@ -9,7 +9,7 @@
 	let gddData = $derived(ludosStore.gddData);
 
 	function update(key: string, value: string) {
-		ludosStore.updateFrontmatterField(key, value);
+		ludosStore.updateMetadataField(key, value);
 	}
 </script>
 
