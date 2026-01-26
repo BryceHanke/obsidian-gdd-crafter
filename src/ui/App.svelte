@@ -1,9 +1,7 @@
 <script lang="ts">
-	import { TFile } from 'obsidian';
 	import { LudosStore } from '../stores/store.svelte';
-	import Checklist from './components/Checklist.svelte';
-	import FormView from './components/FormView.svelte';
-	import Guide from './components/Guide.svelte';
+	import GDDEditor from './components/GDDEditor.svelte';
+	import EmptyState from './components/EmptyState.svelte';
 
 	interface Props {
 		ludosStore: LudosStore;
@@ -12,57 +10,32 @@
 	let { ludosStore }: Props = $props();
 
 	let activeFile = $derived(ludosStore.activeFile);
-	let activeFileType = $derived(ludosStore.activeFileType);
-
+	let isGDD = $derived(ludosStore.isGDD);
 </script>
 
 <div class="ludos-container">
 	{#if activeFile}
-		<h2>{activeFile.basename}</h2>
-
-		{#if activeFileType}
-			<div class="type-badge">{activeFileType}</div>
-
-			<FormView {ludosStore} />
-
-			{#if activeFileType === 'mechanic/interaction' || activeFileType === 'entity/door'}
-				<div class="checklist-section">
-					<h3>The Door Problem Checklist</h3>
-					<Checklist {ludosStore} />
-				</div>
-			{/if}
-
+		{#if isGDD}
+			<GDDEditor {ludosStore} />
 		{:else}
-			<div class="empty-state-container">
-				<p class="empty-state">No type defined in frontmatter.</p>
-				<Guide />
-			</div>
+			<EmptyState {ludosStore} />
 		{/if}
 	{:else}
-		<Guide />
+		<div class="no-file">
+			<p>Open a markdown file to start.</p>
+		</div>
 	{/if}
 </div>
 
 <style>
 	.ludos-container {
-		padding: 10px;
+		height: 100%;
+		display: flex;
+		flex-direction: column;
 	}
-	.type-badge {
-		background-color: var(--interactive-accent);
-		color: var(--text-on-accent);
-		padding: 4px 8px;
-		border-radius: 4px;
-		display: inline-block;
-		margin-bottom: 10px;
-		font-size: 0.8em;
-	}
-	.checklist-section {
-		margin-top: 20px;
-		border-top: 1px solid var(--background-modifier-border);
-		padding-top: 10px;
-	}
-	.empty-state {
+	.no-file {
+		padding: 20px;
+		text-align: center;
 		color: var(--text-muted);
-		font-style: italic;
 	}
 </style>
