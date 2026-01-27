@@ -14,8 +14,6 @@ export class LudosStore {
         this.app.workspace.on('active-leaf-change', (leaf) => {
             if (leaf && leaf.view.getViewType() === 'markdown') {
                 this.setActiveFile(this.app.workspace.getActiveFile());
-            } else {
-                this.setActiveFile(null);
             }
         });
 
