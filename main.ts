@@ -1,13 +1,18 @@
 import { Plugin, ItemView, WorkspaceLeaf } from 'obsidian';
 import { LudosView, LUDOS_VIEW_TYPE } from './src/ui/LudosView';
 import { LudosStore } from './src/stores/store.svelte';
+import { LudosSettingTab, DEFAULT_SETTINGS } from './src/settings';
+import type { LudosSettings } from './src/types';
 
 export default class LudosPlugin extends Plugin {
+	settings: LudosSettings;
 	ludosStore: LudosStore;
 
 	async onload() {
+		await this.loadSettings();
+
 		// Initialize the store
-		this.ludosStore = new LudosStore(this.app);
+		this.ludosStore = new LudosStore(this.app, this.settings);
 
 		// Register the custom view
 		this.registerView(
@@ -28,6 +33,9 @@ export default class LudosPlugin extends Plugin {
 				this.activateView();
 			},
 		});
+
+		// Add setting tab
+		this.addSettingTab(new LudosSettingTab(this.app, this));
 	}
 
 	async onunload() {
@@ -52,5 +60,13 @@ export default class LudosPlugin extends Plugin {
 
 		// "Reveal" the leaf in case it is in a collapsed sidebar
 		workspace.revealLeaf(leaf);
+	}
+
+	async loadSettings() {
+		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+	}
+
+	async saveSettings() {
+		await this.saveData(this.settings);
 	}
 }
