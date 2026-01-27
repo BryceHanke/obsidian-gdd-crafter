@@ -1,31 +1,14 @@
 import { App, TFile } from 'obsidian';
-import { GameElementRepository } from '../data/GameElementRepository';
-import { SchemaService } from '../services/SchemaService';
-import { CanvasGenerator } from '../services/CanvasGenerator';
-import type { GameElement, LudosSettings, ChecklistItemDefinition } from '../types';
+import { parseGDD, updateTitle, updateMetadata, updateSection } from '../utils/markdownParser';
+import type { GDDData, LudosSettings } from '../types';
 
 export class LudosStore {
     app: App;
-    repo: GameElementRepository;
-    schemaService!: SchemaService;
-    canvasGenerator!: CanvasGenerator;
-
     activeFile = $state<TFile | null>(null);
-    activeElement = $state<GameElement | null>(null);
-
-    // Derived state
-    activeType = $derived(this.activeElement?.type || '');
-    verbSchema = $derived(this.schemaService?.getVerbSchema(this.activeType));
-    checklistItems = $derived(this.schemaService?.getChecklistItems(this.activeType) || []);
-
-    // Checklist state from frontmatter
-    qaChecklist = $derived(this.activeElement?.frontmatter?.qa_checklist || {});
+    gddData = $state<GDDData | null>(null);
 
     constructor(app: App, settings: LudosSettings) {
         this.app = app;
-        this.repo = new GameElementRepository(app);
-        this.schemaService = new SchemaService(settings);
-        this.canvasGenerator = new CanvasGenerator(app, this.repo);
 
         // Listen for active leaf changes
         this.app.workspace.on('active-leaf-change', (leaf) => {
@@ -42,56 +25,43 @@ export class LudosStore {
         // Listen for modifications
         this.app.vault.on('modify', async (file) => {
              if (this.activeFile && file.path === this.activeFile.path) {
-                 await this.refreshActiveElement();
+                 await this.loadFile(this.activeFile);
              }
         });
     }
 
     async setActiveFile(file: TFile | null) {
         this.activeFile = file;
-        await this.refreshActiveElement();
-    }
-
-    async refreshActiveElement() {
-        if (this.activeFile) {
-            this.activeElement = await this.repo.getById(this.activeFile.path);
+        if (file) {
+            await this.loadFile(file);
         } else {
-            this.activeElement = null;
+            this.gddData = null;
         }
     }
 
-    async updateFrontmatter(updates: Record<string, any>) {
-        if (this.activeFile) {
-            await this.repo.updateFrontmatter(this.activeFile.path, updates);
-        }
+    async loadFile(file: TFile) {
+        const content = await this.app.vault.read(file);
+        this.gddData = parseGDD(content);
     }
 
-    async updateChecklist(itemId: string, category: string, checked: boolean) {
-        if (!this.activeElement) return;
-
-        // clone deep
-        const currentChecklist = JSON.parse(JSON.stringify(this.qaChecklist));
-
-        if (!currentChecklist[category]) {
-            currentChecklist[category] = {};
-        }
-        currentChecklist[category][itemId] = checked;
-
-        await this.updateFrontmatter({ qa_checklist: currentChecklist });
-    }
-
-    async generateCanvas() {
+    async updateGDDTitle(newTitle: string) {
         if (!this.activeFile) return;
-        const json = await this.canvasGenerator.generateLoopCanvas(this.activeFile);
+        const content = await this.app.vault.read(this.activeFile);
+        const newContent = updateTitle(content, newTitle);
+        await this.app.vault.modify(this.activeFile, newContent);
+    }
 
-        // Save to file
-        const canvasPath = this.activeFile.path.replace(/\.md$/, '.canvas');
-        let file = this.app.vault.getAbstractFileByPath(canvasPath);
+    async updateGDDMetadata(key: string, value: string) {
+        if (!this.activeFile) return;
+        const content = await this.app.vault.read(this.activeFile);
+        const newContent = updateMetadata(content, key, value);
+        await this.app.vault.modify(this.activeFile, newContent);
+    }
 
-        if (file instanceof TFile) {
-            await this.app.vault.modify(file, json);
-        } else {
-            await this.app.vault.create(canvasPath, json);
-        }
+    async updateGDDSection(header: string, newContent: string) {
+        if (!this.activeFile) return;
+        const content = await this.app.vault.read(this.activeFile);
+        const newContentStr = updateSection(content, header, newContent);
+        await this.app.vault.modify(this.activeFile, newContentStr);
     }
 }
