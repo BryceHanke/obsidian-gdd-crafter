@@ -42,3 +42,16 @@ export interface LudosSettings {
     verbSchemas: VerbSchema[];
     checklistSchemas: ChecklistSchema[];
 }
+
+export interface GDDData {
+    title: string;
+    genre: string;
+    audience: string;
+    hook: string;
+    theme: string;
+    coreLoop: string;
+    mechanics: string;
+    story: string;
+    visuals: string;
+    tagline?: string;
+}
