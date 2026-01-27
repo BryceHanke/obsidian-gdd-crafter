@@ -1,107 +1,97 @@
 import { App, TFile } from 'obsidian';
-import type { GDDData } from '../types';
-import { parseGDD, updateGDDSection, updateGDDMetadata, SECTION_HEADERS, generateGDDTemplate } from '../utils/markdownParser';
+import { GameElementRepository } from '../data/GameElementRepository';
+import { SchemaService } from '../services/SchemaService';
+import { CanvasGenerator } from '../services/CanvasGenerator';
+import type { GameElement, LudosSettings, ChecklistItemDefinition } from '../types';
 
 export class LudosStore {
-	app: App;
-	_activeFile = $state<TFile | null>(null);
-	_gddData = $state<GDDData | null>(null);
+    app: App;
+    repo: GameElementRepository;
+    schemaService!: SchemaService;
+    canvasGenerator!: CanvasGenerator;
 
-	// Check if the current file is recognized as a GDD
-	isGDD = $derived(this._gddData !== null);
+    activeFile = $state<TFile | null>(null);
+    activeElement = $state<GameElement | null>(null);
 
-	get activeFile() {
-		return this._activeFile;
-	}
+    // Derived state
+    activeType = $derived(this.activeElement?.type || '');
+    verbSchema = $derived(this.schemaService?.getVerbSchema(this.activeType));
+    checklistItems = $derived(this.schemaService?.getChecklistItems(this.activeType) || []);
 
-	get gddData() {
-		return this._gddData;
-	}
+    // Checklist state from frontmatter
+    qaChecklist = $derived(this.activeElement?.frontmatter?.qa_checklist || {});
 
-	constructor(app: App) {
-		this.app = app;
+    constructor(app: App, settings: LudosSettings) {
+        this.app = app;
+        this.repo = new GameElementRepository(app);
+        this.schemaService = new SchemaService(settings);
+        this.canvasGenerator = new CanvasGenerator(app, this.repo);
 
-		// Listen for active leaf changes
-		this.app.workspace.on('active-leaf-change', (leaf) => {
-			if (leaf && leaf.view.getViewType() === 'markdown') {
-				this.setActiveFile(this.app.workspace.getActiveFile());
-			} else {
-				this.setActiveFile(null);
-			}
-		});
+        // Listen for active leaf changes
+        this.app.workspace.on('active-leaf-change', (leaf) => {
+            if (leaf && leaf.view.getViewType() === 'markdown') {
+                this.setActiveFile(this.app.workspace.getActiveFile());
+            } else {
+                this.setActiveFile(null);
+            }
+        });
 
-		// Initial check
-		this.setActiveFile(this.app.workspace.getActiveFile());
+        // Initial check
+        this.setActiveFile(this.app.workspace.getActiveFile());
 
-		// Listen for file changes (both content and metadata)
-		this.app.vault.on('modify', (file) => {
-			 if (this._activeFile && file.path === this._activeFile.path) {
-				 this.loadGDD(this._activeFile);
-			 }
-		});
-	}
+        // Listen for modifications
+        this.app.vault.on('modify', async (file) => {
+             if (this.activeFile && file.path === this.activeFile.path) {
+                 await this.refreshActiveElement();
+             }
+        });
+    }
 
-	async setActiveFile(file: TFile | null) {
-		this._activeFile = file;
-		if (file) {
-			await this.loadGDD(file);
-		} else {
-			this._gddData = null;
-		}
-	}
+    async setActiveFile(file: TFile | null) {
+        this.activeFile = file;
+        await this.refreshActiveElement();
+    }
 
-	async loadGDD(file: TFile) {
-        // Read content to check for GDD marker
-        const content = await this.app.vault.read(file);
-
-        // Check for code block marker OR frontmatter (legacy)
-        const hasCodeBlock = content.includes('```json:ludos');
-        const cache = this.app.metadataCache.getFileCache(file);
-        const hasFrontmatter = cache?.frontmatter?.type === 'gdd';
-
-        if (hasCodeBlock || hasFrontmatter) {
-			this._gddData = parseGDD(content, cache?.frontmatter);
-		} else {
-			this._gddData = null;
-		}
-	}
-
-	async initializeGDD() {
-		if (!this._activeFile) return;
-
-		const template = generateGDDTemplate();
-		await this.app.vault.modify(this._activeFile, template);
-	}
-
-	async updateMetadataField(key: string, value: any) {
-		if (!this._activeFile) return;
-
-        const content = await this.app.vault.read(this._activeFile);
-
-        // Pass current gddData as baseline for migration
-        const currentData = this._gddData ? {
-            title: this._gddData.title,
-            genre: this._gddData.genre,
-            tagline: this._gddData.tagline,
-            targetAudience: this._gddData.targetAudience
-        } : undefined;
-
-        const newContent = updateGDDMetadata(content, key, value, currentData);
-
-        if (newContent !== content) {
-            await this.app.vault.modify(this._activeFile, newContent);
+    async refreshActiveElement() {
+        if (this.activeFile) {
+            this.activeElement = await this.repo.getById(this.activeFile.path);
+        } else {
+            this.activeElement = null;
         }
-	}
+    }
 
-	async updateBodySection(headerKey: keyof typeof SECTION_HEADERS, newContent: string) {
-		if (!this._activeFile) return;
+    async updateFrontmatter(updates: Record<string, any>) {
+        if (this.activeFile) {
+            await this.repo.updateFrontmatter(this.activeFile.path, updates);
+        }
+    }
 
-		const header = SECTION_HEADERS[headerKey];
-		const content = await this.app.vault.read(this._activeFile);
-		const newFileContent = updateGDDSection(content, header, newContent);
+    async updateChecklist(itemId: string, category: string, checked: boolean) {
+        if (!this.activeElement) return;
 
-		if (newFileContent !== content) {
-			await this.app.vault.modify(this._activeFile, newFileContent);
-		}
-	}
+        // clone deep
+        const currentChecklist = JSON.parse(JSON.stringify(this.qaChecklist));
+
+        if (!currentChecklist[category]) {
+            currentChecklist[category] = {};
+        }
+        currentChecklist[category][itemId] = checked;
+
+        await this.updateFrontmatter({ qa_checklist: currentChecklist });
+    }
+
+    async generateCanvas() {
+        if (!this.activeFile) return;
+        const json = await this.canvasGenerator.generateLoopCanvas(this.activeFile);
+
+        // Save to file
+        const canvasPath = this.activeFile.path.replace(/\.md$/, '.canvas');
+        let file = this.app.vault.getAbstractFileByPath(canvasPath);
+
+        if (file instanceof TFile) {
+            await this.app.vault.modify(file, json);
+        } else {
+            await this.app.vault.create(canvasPath, json);
+        }
+    }
 }
