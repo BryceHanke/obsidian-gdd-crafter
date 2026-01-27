@@ -1,25 +1,44 @@
 {
-  "name": "ludos-obsidian-plugin",
-  "version": "1.0.0",
-  "description": "Transform Obsidian into a Game Design environment",
+  "name": "obsidian-compu-judge",
+  "version": "6.9.0",
+  "description": "Compu-Judge 98: Narrative HUD (Cortex Upgrade)",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
-    "build": "node node_modules/typescript/bin/tsc -noEmit -skipLibCheck && node esbuild.config.mjs production",
-    "version": "node version-bump.mjs && git add manifest.json versions.json"
+    "build": "node esbuild.config.mjs production"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "obsidian",
+    "plugin",
+    "ai",
+    "retro",
+    "svelte5"
+  ],
+  "author": "Global MegaCorp",
   "license": "MIT",
   "devDependencies": {
-    "@types/node": "^16.11.6",
     "@tsconfig/svelte": "^5.0.0",
-    "esbuild": "0.17.19",
-    "esbuild-svelte": "^0.8.0",
-    "obsidian": "^1.5.7",
-    "svelte": "^5.0.0-next.1",
-    "svelte-preprocess": "^6.0.0",
-    "tslib": "2.4.0",
-    "typescript": "^5.0.0"
+    "@types/node": "^18.0.0",
+    "@typescript-eslint/eslint-plugin": "^6.0.0",
+    "@typescript-eslint/parser": "^6.0.0",
+    "builtin-modules": "3.3.0",
+    "esbuild": "^0.19.12",
+    "esbuild-svelte": "0.8.0",
+    "obsidian": "^1.10.3",
+    "svelte": "^5.0.0",
+    "svelte-preprocess": "^5.1.0",
+    "tslib": "^2.6.0",
+    "typescript": "^5.3.3"
+  },
+  "dependencies": {
+    "@playwright/test": "^1.57.0",
+    "compromise": "^14.10.0",
+    "pdfjs-dist": "^5.4.449",
+    "zod": "^3.22.4"
+  },
+  "overrides": {
+    "esbuild-svelte": {
+      "svelte": "$svelte"
+    }
   }
 }
